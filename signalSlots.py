@@ -45,4 +45,20 @@ app = QtWidgets.QApplication(sys.argv)
 a_window = Window()
 sys.exit(app.exec_())
 """
+import json
+from datetime import datetime
 
+import requests
+
+API_ENDPOINT = "http://127.0.0.1:8000/add_recognition/"
+
+
+b = format(datetime.now())
+headers = {'Content-Type': 'application/json', 'Authorization': 'Token 1db84975bd3ec76c294a6b65a6fbe6d1cbb9f42a'}
+data = {"Token": "1db84975bd3ec76c294a6b65a6fbe6d1cbb9f42a", "time": b }
+
+r = requests.post(url=API_ENDPOINT, data=json.dumps(data), headers = headers)
+
+#data = r.json()
+pastebin_url = r.text
+print("The pastebin URL is:%s" % pastebin_url)

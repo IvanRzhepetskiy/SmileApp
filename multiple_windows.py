@@ -1,9 +1,51 @@
+import json
 import sys
+import threading
+import time
+
+import cv2
 from PyQt5.QtGui     import *
 from PyQt5.QtCore    import *
 from PyQt5.QtWidgets import *
+from PyQt5 import QtWidgets
 from PyQt5.uic.properties import QtGui
 import requests
+from datetime import datetime
+global threads
+threads = []
+global_token = 0
+
+def catch_exceptions(t, val, tb):
+    QtWidgets.QMessageBox.critical(None,
+                                   "An exception was raised",
+                                   "Exception type: {}".format(t))
+    old_hook(t, val, tb)
+
+old_hook = sys.excepthook
+sys.excepthook = catch_exceptions
+
+
+class ResumableTimer:
+    def __init__(self, timeout, callback):
+        self.timeout = timeout
+        self.callback = callback
+        self.timer = threading.Timer(timeout, callback)
+        self.startTime = time.time()
+
+
+    def start(self):
+        self.timer.start()
+
+    def pause(self):
+        self.timer.cancel()
+        self.pauseTime = time.time()
+
+    def resume(self):
+        self.timer = threading.Timer(
+            self.timeout - (self.pauseTime - self.startTime),
+            self.callback)
+
+        self.timer.start()
 
 class Window(QMainWindow):
     def __init__(self):
@@ -17,29 +59,49 @@ class Window(QMainWindow):
 
     def InitUI(self):
         self.setWindowTitle(self.title)
-        self.setGeometry(self.top, self.left, self.width, self.height)
+        #self.setGeometry(self.top, self.left, self.width, self.height)
+        layoutMain = QVBoxLayout()
+        layoutHLogin = QHBoxLayout()
+        layoutHPassword = QHBoxLayout()
+        layoutHButtons = QHBoxLayout()
+        layoutMain.addLayout(layoutHLogin)
+        layoutMain.addLayout(layoutHPassword)
+        layoutMain.addLayout(layoutHButtons)
         login_label = QLabel('Login', self)
         login_label.move(100, 100)
-        buttonWindow1 = QPushButton('Window1', self)
-        buttonWindow1.move(150, 300)
-        buttonWindow1.clicked.connect(self.buttonWindow1_onClick)
-        self.lineEdit1 = QLineEdit(self)
-        self.lineEdit1.setGeometry(250, 100, 400, 30)
+        layoutHLogin.addWidget(login_label)
+
+        buttonLogin = QPushButton('Login', self)
+        buttonLogin.move(150, 300)
+        buttonLogin.clicked.connect(self.buttonWindow1_onClick)
+        layoutHButtons.addWidget(buttonLogin)
+
+        self.lineEdit_Login = QLineEdit(self)
+        self.lineEdit_Login.setGeometry(250, 100, 400, 30)
+        layoutHLogin.addWidget(self.lineEdit_Login)
 
         password_label = QLabel('Password', self)
         password_label.move(100, 200)
-        self.lineEdit2 = QLineEdit( self)
-        self.lineEdit2.setEchoMode(QLineEdit.Password)
-        self.lineEdit2.setGeometry(250, 200, 400, 30)
+        layoutHPassword.addWidget(password_label)
+
+        self.lineEdit_Password = QLineEdit( self)
+        self.lineEdit_Password.setEchoMode(QLineEdit.Password)
+        self.lineEdit_Password.setGeometry(250, 200, 400, 30)
+        layoutHPassword.addWidget(self.lineEdit_Password)
+
         buttonRegister = QPushButton('Register', self)
         buttonRegister.move(300, 300)
         buttonRegister.clicked.connect(self.buttonRegister_onClick)
+        layoutHButtons.addWidget(buttonRegister)
+
+        self.setLayout(layoutMain)
         self.show()
 
 
 
     @pyqtSlot()
     def buttonWindow1_onClick(self):
+        global global_token
         self.statusBar().showMessage("Switched to window 1")
         # importing the requests library
 
@@ -50,22 +112,30 @@ class Window(QMainWindow):
         #API_KEY = "XXXXXXXXXXXXXXXXX"
 
         # data to be sent to api
-        login = self.lineEdit1.text()
+        login = self.lineEdit_Login.text()
+        password = self.lineEdit_Password.text()
         data = {
-                "login": login,
-                "password": "passasd" }
+                "username": login,
+                "password": password}
 
         # sending post request and saving response as response object
         r = requests.post(url=API_ENDPOINT, data=data)
         data = r.json()
         token = data['token']
         print(token)
+        global_token = token
         # extracting response text
         pastebin_url = r.text
         print("The pastebin URL is:%s" % pastebin_url)
-        self.cams = Window1(self.lineEdit1.text())
-        self.cams.show()
-        self.close()
+        if data['success']:
+            self.cams = MainWindow()
+            self.cams.show()
+            self.close()
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+
+            msg.setText('Логин неверный')
 
 
     @pyqtSlot()
@@ -125,14 +195,14 @@ class WindowRegister(QDialog):
         label_password = QLabel('Password')
         layoutV.addWidget(label_password)
 
-        line_edit_username = QLineEdit()
-        layoutV2.addWidget(line_edit_username)
+        self.line_edit_username = QLineEdit()
+        layoutV2.addWidget(self.line_edit_username)
 
-        line_edit_login = QLineEdit()
-        layoutV2.addWidget(line_edit_login)
+        self.line_edit_login = QLineEdit()
+        layoutV2.addWidget(self.line_edit_login)
 
-        line_edit_password = QLineEdit()
-        layoutV2.addWidget(line_edit_password)
+        self.line_edit_password = QLineEdit()
+        layoutV2.addWidget(self.line_edit_password)
 
         button_register = QPushButton('Register')
         button_register.clicked.connect(self.register_onClick)
@@ -151,35 +221,188 @@ class WindowRegister(QDialog):
         self.close()
 
     def register_onClick(self):
-        API_ENDPOINT = "http://127.0.0.1:8000/login_with_token/"
+        API_ENDPOINT = "http://127.0.0.1:8000/register/"
 
         # your API key here
         # API_KEY = "XXXXXXXXXXXXXXXXX"
 
         # data to be sent to api
-        login = self.lineEdit1.text()
         data = {
-            "username": self.line_edit_username.text ,
-            "login": self.line_edit_login.text,
-            "password": self.line_edit_password.text
+            "username":  self.line_edit_username.text(),
+            "login": self.line_edit_login.text(),
+            "password": self.line_edit_password.text()
         }
 
-        # sending post request and saving response as response object
         r = requests.post(url=API_ENDPOINT, data=data)
-        data = r.json()
-        token = data['token']
-        print(token)
-        # extracting response text
+        #data = r.json()
         pastebin_url = r.text
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+
+        msg.setText(pastebin_url)
+        msg.setInformativeText("This is additional information")
+        msg.setWindowTitle("MessageBox demo")
+        msg.setDetailedText("The details are as follows:")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
         print("The pastebin URL is:%s" % pastebin_url)
-        pass
+        self.cams = Window()
+        self.cams.show()
+        self.close()
 
     @pyqtSlot()
     def buttonRegisterNewUser_onClick(self):
         print('Registered')
         pass
 
-if __name__ == '__main__':
-    app=QApplication(sys.argv)
-    ex=Window()
+class MainWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Smile')
+        self.setWindowIcon(self.style().standardIcon(QStyle.SP_FileDialogInfoView))
+        self.timer_was_on = False
+        self.timer_on_now = False
+        self.start_recognizing = False
+        self.recognising_started = False
+        self.last_recognition_time = time.time()
+        self.t = ResumableTimer(3, self.detection_thread)
+        layoutMain = QVBoxLayout()
+        layoutH1 = QHBoxLayout()
+        layoutH2 = QHBoxLayout()
+        layoutMain.addLayout(layoutH1)
+        layoutMain.addLayout(layoutH2)
+
+        button_start = QPushButton('Start')
+        button_start.clicked.connect(self.onClick_start)
+        layoutH1.addWidget(button_start)
+
+        self.label_smile = QLabel('Smile found: -')
+        layoutH2.addWidget(self.label_smile)
+
+        button_goMainWindow = QPushButton('<-')
+        button_goMainWindow.clicked.connect(self.goMainWindow)
+        layoutH1.addWidget(button_goMainWindow)
+
+        self.setLayout(layoutMain)
+
+    def goMainWindow(self):
+        self.cams = Window()
+        self.cams.show()
+        self.close()
+
+    def onClick_start(self):
+        global global_token
+        print(threading.currentThread().getName())
+        if not self.recognising_started:
+            self.t.start()
+            self.recognising_started = True
+        if not self.start_recognizing:
+            self.start_recognizing = True
+        else:
+            self.start_recognizing = False
+        if not self.timer_was_on:
+            threads.append(self.t)
+
+            self.timer_was_on = True
+
+        else:
+            self.timer_on_now = True
+            self.label_smile.setText("hola")
+
+
+            #self.t.resume()
+
+
+        pass
+
+    def detection_thread(self):
+
+        while True:
+            print(time.time() - self.last_recognition_time)
+            if time.time() - self.last_recognition_time > 20:
+
+                self.start_recognizing = True
+            if not self.start_recognizing:
+                print('Not recogn')
+            else:
+                font = cv2.FONT_HERSHEY_SIMPLEX
+
+                facePath = "haarcascade_frontalface_default.xml"
+                smilePath = "haarcascade_smile.xml"
+                faceCascade = cv2.CascadeClassifier(facePath)
+                smileCascade = cv2.CascadeClassifier(smilePath)
+
+                cap = cv2.VideoCapture(0)
+                cap.set(3, 640)
+                cap.set(4, 480)
+
+                sF = 1.05
+
+                #while (cap.isOpened()):
+                while (cap.isOpened() and self.start_recognizing):
+                    #print(threading.currentThread().getName())
+                    ret, frame = cap.read()  # Capture frame-by-frame
+                    img = frame
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+                    faces = faceCascade.detectMultiScale(
+                        gray,
+                        scaleFactor=sF,
+                        minNeighbors=15,
+                        minSize=(55, 55),
+                        flags=cv2.CASCADE_SCALE_IMAGE
+                    )
+                    # ---- Draw a rectangle around the faces
+
+                    for (x, y, w, h) in faces:
+                        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                        roi_gray = gray[y:y + h, x:x + w]
+                        roi_color = frame[y:y + h, x:x + w]
+
+                        smile = smileCascade.detectMultiScale(
+                            roi_gray,
+                            scaleFactor=1.7,
+                            minNeighbors=9,
+                            minSize=(25, 25),
+                            flags=cv2.CASCADE_SCALE_IMAGE
+                        )
+
+                        for (x, y, w, h) in smile:
+                            print("Found " + str(len(smile)) + " smiles!")
+                            cv2.rectangle(roi_color, (x, y), (x + w, y + h), (255, 0, 0), 1)
+                            cv2.putText(roi_color, 'SMILE', (x + 5, y + h - 5), font, 1, (255, 255, 0), 1)
+                            API_ENDPOINT = "http://127.0.0.1:8000/add_recognition/"
+                            headers = {'Content-Type': 'application/json',
+                                       'Authorization': "Token " + global_token}
+                            data = {"Token": global_token, "time": format(datetime.now())}
+                            print(global_token)
+                            r = requests.post(url=API_ENDPOINT, data=json.dumps(data), headers=headers)
+                            pastebin_url = r.text
+                            print("The pastebin URL is:%s" % pastebin_url)
+                            #time.sleep(3)
+                            #cap.release()
+                            #cv2.destroyAllWindows()
+                            self.last_recognition_time = time.time()
+                            self.start_recognizing = False
+                            break
+                        break
+                            # time.sleep(20)
+                    cv2.imshow('Smile Detector', frame)
+                    c = cv2.waitKey(7) % 0x100
+
+                    if c == 27:
+                        break
+                cap.release()
+                cv2.destroyAllWindows()
+
+
+def main():
+    app = QApplication(sys.argv)
+    ex = Window()
     sys.exit(app.exec_())
+    raise RuntimeError
+
+
+if __name__ == '__main__':
+    main()
+
