@@ -276,6 +276,10 @@ class MainWindow(QDialog):
         button_start.clicked.connect(self.onClick_start)
         layoutH1.addWidget(button_start)
 
+        button_getStats = QPushButton('Get Statistics')
+        button_getStats.clicked.connect(self.onClick_getStats)
+        layoutH1.addWidget(button_getStats)
+
         self.label_smile = QLabel('Smile found: -')
         layoutH2.addWidget(self.label_smile)
 
@@ -289,6 +293,13 @@ class MainWindow(QDialog):
         self.cams = Window()
         self.cams.show()
         self.close()
+
+    def onClick_getStats(self):
+
+        self.cams = StatisticsWindow()
+        self.cams.show()
+        self.close()
+
 
     def onClick_start(self):
         global global_token
@@ -395,7 +406,83 @@ class MainWindow(QDialog):
                 cap.release()
                 cv2.destroyAllWindows()
 
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+import matplotlib.pyplot as plt
 
+import random
+
+class StatisticsWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        global global_token
+        # a figure instance to plot on
+        self.figure = plt.figure()
+
+        # this is the Canvas Widget that displays the `figure`
+        # it takes the `figure` instance as a parameter to __init__
+        self.canvas = FigureCanvas(self.figure)
+
+        # this is the Navigation widget
+        # it takes the Canvas widget and a parent
+        self.toolbar = NavigationToolbar(self.canvas, self)
+
+        # Just some button connected to `plot` method
+        self.button = QPushButton('Plot')
+        self.button.clicked.connect(self.plot)
+
+        # set the layout
+        layout = QVBoxLayout()
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.canvas)
+        layout.addWidget(self.button)
+        self.setLayout(layout)
+
+
+        API_ENDPOINT = "http://127.0.0.1:8000/get_recognition_stats/"
+
+        # your API key here
+        # API_KEY = "XXXXXXXXXXXXXXXXX"
+
+        # data to be sent to api
+
+
+
+        headers = {'Content-Type': 'application/json',
+                   'Authorization': "Token " + global_token}
+        data = {"Token": global_token}
+
+        r = requests.post(url=API_ENDPOINT, data=json.dumps(data), headers=headers)
+        # sending post request and saving response as response object
+        data = r.json()
+        print(data)
+        list_of_dates = data['time_list']
+        # extracting response text
+        pastebin_url = r.text
+        print("The pastebin URL is!!!!!!!!!!!!!!!!!:%s" % pastebin_url)
+        if data['success']:
+            print('Success')
+            self.plot(list_of_times=list_of_dates)
+
+    def plot(self, list_of_times):
+        ''' plot some random stuff '''
+        # random data
+        data = [random.random() for i in range(10)]
+        data = list_of_times
+        # instead of ax.hold(False)
+        self.figure.clear()
+
+        # create an axis
+        ax = self.figure.add_subplot(111)
+
+        # discards the old graph
+        # ax.hold(False) # deprecated, see above
+
+        # plot data
+        ax.plot(data, '*-')
+
+        # refresh canvas
+        self.canvas.draw()
 def main():
     app = QApplication(sys.argv)
     ex = Window()
