@@ -27,4 +27,5 @@ Python 3+ needed and webcam
 ![alt text](screenshots/Screenshot_5.png)
 ![alt text](screenshots/Screenshot_4.png)
 
-### Statistics provided (soon)
+### Statistics of your smile provided 
+![alt text](screenshots/Screenshot_10.png)
